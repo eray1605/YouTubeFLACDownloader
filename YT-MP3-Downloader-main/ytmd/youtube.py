@@ -6,7 +6,7 @@ import re
 
 from yt_dlp import YoutubeDL
 
-from ytmd import config
+from ytmd import config, verify
 from ytmd.utils import get_ffmpeg_path, sanitize_filename
 
 
@@ -385,8 +385,16 @@ def download_audio(url, output_path, filename_base=None, should_cancel=None,
 
     if filename_base:
         safe = sanitize_filename(filename_base)
-        if os.path.exists(os.path.join(output_path, f"{safe}.{audio_format.codec}")):
-            return True
+        vorhanden = os.path.join(output_path, f"{safe}.{audio_format.codec}")
+        if os.path.exists(vorhanden):
+            if verify.is_complete(vorhanden):
+                return True
+            # Rest eines abgebrochenen Laufs – weg damit, sonst gilt die halbe
+            # Datei für immer als fertig.
+            try:
+                os.remove(vorhanden)
+            except OSError:
+                pass
         outtmpl = os.path.join(output_path, safe.replace("%", "%%") + ".%(ext)s")
     else:
         outtmpl = os.path.join(output_path, "%(title)s.%(ext)s")

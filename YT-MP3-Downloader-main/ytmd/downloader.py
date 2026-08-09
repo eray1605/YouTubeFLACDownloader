@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from ytmd import config
-from ytmd import tags
+from ytmd import tags, verify
 from ytmd.albumart import find_cover_url
 from ytmd.covers import fetch_cover
 from ytmd.utils import free_bytes, get_download_folder, sanitize_filename
@@ -128,6 +128,9 @@ class PlaylistDownloader:
             return found
         for name in names:
             if not name.lower().endswith(suffix.lower()):
+                continue
+            # Halbe Datei aus einem abgebrochenen Lauf gilt nicht als erledigt
+            if not verify.is_complete(os.path.join(folder, name)):
                 continue
             stem = name[:-len(suffix)]
             key = NUMBER_PREFIX.sub("", stem)
