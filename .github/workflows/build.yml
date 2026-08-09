@@ -143,8 +143,42 @@ jobs:
           name: ${{ matrix.name }}
           path: ${{ matrix.artifact }}.zip
 
+  android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python for Chaquopy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/debug/app-debug.apk \
+             YT-Music-Downloader-Android.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android
+          path: YT-Music-Downloader-Android.apk
+
   release:
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -158,3 +192,4 @@ jobs:
             Windows/*.zip
             macOS/*.zip
             Linux/*.zip
+            Android/*.apk

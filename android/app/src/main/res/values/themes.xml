@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose bringt sein eigenes Aussehen mit; hier wird nur das Fenster
+         gesetzt. Deshalb reicht ein Plattform-Theme ohne zusätzliche
+         Material-Components-Abhängigkeit. -->
+    <style name="Theme.YTMusic" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

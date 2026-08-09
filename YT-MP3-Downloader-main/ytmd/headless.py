@@ -76,6 +76,27 @@ def suche(query, limit=None):
     } for r in treffer])
 
 
+def fehlertext(exc):
+    """Rohen yt-dlp-Fehler in eine verständliche Meldung samt Rat übersetzen."""
+    from ytmd import youtube
+
+    art = youtube.classify_error(exc)
+    text = youtube.ERROR_LABELS.get(art, "Fehler")
+    rat = {
+        youtube.BOT_CHECK: "YouTube stuft die Zugriffe als automatisiert ein. "
+                           "1–2 Stunden warten und weniger gleichzeitig laden.",
+        youtube.BLOCKED: "Vorübergehend blockiert – später erneut versuchen.",
+        youtube.RATE_LIMITED: "Zu viele Anfragen – kurz warten.",
+        youtube.AGE_RESTRICTED: "Altersbeschränkt: nur mit angemeldetem Zugang.",
+        youtube.UNAVAILABLE: "Dieses Video ist nicht mehr abrufbar.",
+        youtube.NO_FORMAT: "Keine Tonspur geliefert – meist Folge einer Sperre.",
+        youtube.FFMPEG_MISSING: "FFmpeg fehlt, deshalb keine Umwandlung möglich.",
+        youtube.NETWORK: "Keine Verbindung.",
+        youtube.DISK: "Kein Speicherplatz mehr.",
+    }.get(art)
+    return f"{text}\n{rat}" if rat else text
+
+
 def einzeln_laden(url, target_folder, audio_format="wav", ffmpeg_path=None):
     """Einen einzelnen Song laden – wie das URL-Feld der Desktop-App."""
     from ytmd.youtube import download_audio
@@ -83,8 +104,11 @@ def einzeln_laden(url, target_folder, audio_format="wav", ffmpeg_path=None):
     if ffmpeg_path:
         utils.set_ffmpeg_path(ffmpeg_path)
     os.makedirs(target_folder, exist_ok=True)
-    download_audio(url, target_folder, audio_format=format_by_name(audio_format))
-    return "Fertig"
+    try:
+        download_audio(url, target_folder, audio_format=format_by_name(audio_format))
+    except Exception as e:
+        return fehlertext(e)
+    return "Fertig – gespeichert in " + target_folder
 
 
 def playlist_info(playlist_file, audio_format="wav", max_tracks=300):

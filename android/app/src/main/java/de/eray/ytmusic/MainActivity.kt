@@ -1,0 +1,373 @@
+package de.eray.ytmusic
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+data class Song(val titel: String, val interpret: String, val dauer: String)
+data class Treffer(val titel: String, val kanal: String, val dauer: String,
+                   val url: String, val bild: String)
+
+/**
+ * Oberfläche im Stil der Desktop-Fassung: oben Suche mit Ergebniskarten,
+ * daneben der Playlist-Bereich – dieselben Farben, dieselben Statusangaben.
+ */
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            var dunkel by remember { mutableStateOf(true) }
+            YtmdTheme(dunkel) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Oberflaeche(dunkel) { dunkel = !dunkel }
+                }
+            }
+        }
+    }
+
+    private fun kopieren(uri: Uri): String {
+        val ziel = File(filesDir, "playlist_" +
+            (uri.lastPathSegment?.substringAfterLast('/') ?: "export.csv"))
+        contentResolver.openInputStream(uri).use { ein ->
+            ziel.outputStream().use { aus -> ein?.copyTo(aus) }
+        }
+        return ziel.absolutePath
+    }
+
+    private fun zielOrdner(): File =
+        File(getExternalFilesDir(null), "Musik").apply { mkdirs() }
+
+    private fun starten(block: Intent.() -> Unit) {
+        startForegroundService(Intent(this, DownloadService::class.java).apply {
+            putExtra("ziel", zielOrdner().absolutePath)
+            block()
+        })
+    }
+
+    private suspend fun python() = withContext(Dispatchers.IO) {
+        if (!Python.isStarted()) Python.start(AndroidPlatform(this@MainActivity))
+        Python.getInstance().getModule("ytmd.headless")
+    }
+
+    @Composable
+    private fun Oberflaeche(dunkel: Boolean, umschalten: () -> Unit) {
+        val bereich = remember { mutableStateOf(0) }   // 0 = Suche, 1 = Playlist
+        var format by remember { mutableStateOf("wav") }
+        var workers by remember { mutableStateOf(2) }
+        var kernStatus by remember { mutableStateOf("Kern wird geprüft …") }
+        var laeuft by remember { mutableStateOf(false) }
+        var ergebnis by remember { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(Unit) {
+            kernStatus = try {
+                python().callAttr("selbsttest").toString()
+            } catch (e: Throwable) { "Kern nicht startbar: ${e.message}" }
+        }
+        LaunchedEffect(Unit) {
+            while (true) {
+                laeuft = DownloadService.Fortschritt.laeuft
+                ergebnis = DownloadService.Fortschritt.ergebnis
+                delay(400)
+            }
+        }
+
+        Column(Modifier.fillMaxSize()) {
+            Kopfzeile(dunkel, umschalten, kernStatus)
+
+            TabRow(selectedTabIndex = bereich.value,
+                   containerColor = MaterialTheme.colorScheme.background,
+                   contentColor = Farben.Akzent) {
+                Tab(selected = bereich.value == 0, onClick = { bereich.value = 0 },
+                    text = { Text("Suche") })
+                Tab(selected = bereich.value == 1, onClick = { bereich.value = 1 },
+                    text = { Text("Playlist") })
+            }
+
+            Einstellungen(format, { format = it }, workers, { workers = it }, laeuft,
+                          zeigeWorkers = bereich.value == 1)
+
+            ergebnis?.let {
+                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                     modifier = Modifier.padding(horizontal = 16.dp))
+            }
+
+            if (bereich.value == 0) SucheBereich(format, laeuft)
+            else PlaylistBereich(format, workers, laeuft)
+        }
+    }
+
+    @Composable
+    private fun Kopfzeile(dunkel: Boolean, umschalten: () -> Unit, status: String) {
+        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+            Column(Modifier.fillMaxWidth()
+                       .windowInsetsPadding(WindowInsets.statusBars)
+                       .padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("YouTube Music Downloader", color = Farben.Akzent,
+                             fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("Songs suchen oder ganze Playlists sichern",
+                             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = umschalten) {
+                        Text(if (dunkel) "☀" else "☾", fontSize = 20.sp)
+                    }
+                }
+                Text(status, fontSize = 10.sp,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                     maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+
+    @Composable
+    private fun Einstellungen(format: String, setFormat: (String) -> Unit,
+                              workers: Int, setWorkers: (Int) -> Unit,
+                              laeuft: Boolean, zeigeWorkers: Boolean) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+               verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                listOf("wav", "flac", "mp3").forEach { f ->
+                    FilterChip(selected = format == f, onClick = { setFormat(f) },
+                               enabled = !laeuft, shape = RoundedCornerShape(10.dp),
+                               label = { Text(f.uppercase()) })
+                }
+            }
+            if (zeigeWorkers) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Gleichzeitig", fontSize = 12.sp,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    listOf(1, 2, 3, 4).forEach { n ->
+                        FilterChip(selected = workers == n, onClick = { setWorkers(n) },
+                                   enabled = !laeuft, shape = RoundedCornerShape(10.dp),
+                                   label = { Text("$n") })
+                    }
+                }
+            }
+        }
+    }
+
+    // === Suche ===
+    @Composable
+    private fun SucheBereich(format: String, laeuft: Boolean) {
+        var frage by remember { mutableStateOf("") }
+        var treffer by remember { mutableStateOf(listOf<Treffer>()) }
+        var sucht by remember { mutableStateOf(false) }
+        val bereich = rememberCoroutineScope()
+
+        fun suchen() {
+            if (frage.isBlank()) return
+            sucht = true
+            bereich.launch {
+                treffer = try {
+                    val roh = withContext(Dispatchers.IO) {
+                        python().callAttr("suche", frage).toString()
+                    }
+                    val j = JSONArray(roh)
+                    (0 until j.length()).map {
+                        val o = j.getJSONObject(it)
+                        Treffer(o.getString("title"), o.getString("channel"),
+                                o.getString("duration"), o.getString("url"),
+                                o.getString("thumb"))
+                    }
+                } catch (e: Throwable) { listOf() }
+                sucht = false
+            }
+        }
+
+        Column(Modifier.padding(horizontal = 16.dp),
+               verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = frage, onValueChange = { frage = it },
+                    placeholder = { Text("Songname eingeben …") },
+                    singleLine = true, shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f))
+                Button(onClick = { suchen() }, enabled = !sucht,
+                       shape = RoundedCornerShape(12.dp),
+                       colors = ButtonDefaults.buttonColors(containerColor = Farben.Akzent)) {
+                    Text("Suchen", fontWeight = FontWeight.Bold)
+                }
+            }
+            if (sucht) Text("Suche läuft …", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp),
+                   verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(treffer) { t ->
+                Surface(color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(model = t.bild, contentDescription = null,
+                                   contentScale = ContentScale.Crop,
+                                   modifier = Modifier.size(96.dp, 54.dp)
+                                       .clip(RoundedCornerShape(8.dp)))
+                        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Text(t.titel, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(listOfNotNull(t.kanal.ifBlank { null },
+                                               t.dauer.ifBlank { null })
+                                     .joinToString("  ·  "),
+                                 fontSize = 11.sp,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Button(onClick = { starten { putExtra("url", t.url)
+                                                     putExtra("format", format) } },
+                               enabled = !laeuft, shape = RoundedCornerShape(10.dp),
+                               contentPadding = PaddingValues(horizontal = 12.dp),
+                               colors = ButtonDefaults.buttonColors(
+                                   containerColor = Farben.Download)) {
+                            Text("Laden", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // === Playlist ===
+    @Composable
+    private fun PlaylistBereich(format: String, workers: Int, laeuft: Boolean) {
+        var playlist by remember { mutableStateOf<String?>(null) }
+        var listenName by remember { mutableStateOf("") }
+        var anzahl by remember { mutableStateOf(0) }
+        var groesse by remember { mutableStateOf("") }
+        var songs by remember { mutableStateOf(listOf<Song>()) }
+        var zustaende by remember { mutableStateOf(mapOf<Int, String>()) }
+        var fertig by remember { mutableStateOf(0) }
+        var gesamt by remember { mutableStateOf(0) }
+
+        val waehlen = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { playlist = kopieren(it) }
+        }
+
+        LaunchedEffect(playlist, format) {
+            val pfad = playlist ?: return@LaunchedEffect
+            try {
+                val roh = withContext(Dispatchers.IO) {
+                    python().callAttr("playlist_info", pfad, format).toString()
+                }
+                val j = JSONObject(roh)
+                listenName = j.getString("name")
+                anzahl = j.getInt("count")
+                groesse = j.getString("size")
+                val liste = j.getJSONArray("tracks")
+                songs = (0 until liste.length()).map {
+                    val o = liste.getJSONObject(it)
+                    Song(o.getString("title"), o.getString("artist"), o.getString("duration"))
+                }
+            } catch (_: Throwable) { }
+        }
+        LaunchedEffect(Unit) {
+            while (true) {
+                fertig = DownloadService.Fortschritt.fertig
+                gesamt = DownloadService.Fortschritt.gesamt
+                zustaende = DownloadService.Fortschritt.zustaende.toMap()
+                delay(400)
+            }
+        }
+
+        Column(Modifier.padding(horizontal = 16.dp),
+               verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { waehlen.launch(arrayOf("*/*")) }, enabled = !laeuft,
+                   shape = RoundedCornerShape(12.dp),
+                   colors = ButtonDefaults.buttonColors(containerColor = Farben.Playlist),
+                   modifier = Modifier.fillMaxWidth()) {
+                Text("Playlist laden (CSV oder JSON)", fontWeight = FontWeight.Bold)
+            }
+            if (anzahl > 0) {
+                Surface(color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp),
+                           verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("$listenName  ·  $anzahl Songs  ·  ca. $groesse",
+                             fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        if (gesamt > 0) {
+                            LinearProgressIndicator(
+                                progress = { fertig.toFloat() / gesamt },
+                                color = Farben.Playlist,
+                                modifier = Modifier.fillMaxWidth().height(6.dp))
+                            Text("$fertig von $gesamt", fontSize = 11.sp,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Button(onClick = { starten { putExtra("playlist", playlist)
+                                             putExtra("format", format)
+                                             putExtra("workers", workers) } },
+                       enabled = !laeuft, shape = RoundedCornerShape(12.dp),
+                       colors = ButtonDefaults.buttonColors(containerColor = Farben.Download),
+                       modifier = Modifier.fillMaxWidth().height(46.dp)) {
+                    Text(if (laeuft) "läuft …" else "Alle herunterladen",
+                         fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp),
+                   verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            itemsIndexed(songs) { i, s ->
+                val (text, farbe) = statusText(zustaende[i] ?: "")
+                Surface(color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("%04d".format(i + 1), fontSize = 11.sp,
+                             fontWeight = FontWeight.Bold,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                             modifier = Modifier.width(42.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.titel, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val unten = listOfNotNull(s.interpret.ifBlank { null },
+                                                      s.dauer.ifBlank { null })
+                                .joinToString("  ·  ")
+                            if (unten.isNotEmpty()) {
+                                Text(unten, fontSize = 11.sp,
+                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        Text(text, fontSize = 11.sp, color = farbe)
+                    }
+                }
+            }
+        }
+    }
+}

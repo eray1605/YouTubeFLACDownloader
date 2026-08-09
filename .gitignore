@@ -14,6 +14,14 @@ dist/
 .idea/
 .vscode/
 
+# Android
+android/.gradle/
+android/local.properties
+android/.idea/
+android/app/release/
+# Vom Build gespiegelter Python-Kern – die Quelle liegt in YT-MP3-Downloader-main/ytmd
+android/app/src/main/python/
+
 # Laufzeitdaten
 _download-log.txt
 *.part
