@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller-Artefakte (werden vom Workflow erzeugt)
+build/
+dist/
+*.spec.bak
+
+# IDE
+.idea/
+.vscode/
+
+# Laufzeitdaten
+_download-log.txt
+*.part
