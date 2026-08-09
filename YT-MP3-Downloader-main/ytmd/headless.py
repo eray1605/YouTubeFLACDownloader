@@ -58,6 +58,60 @@ def run_playlist(playlist_file, target_folder=None, audio_format=None, workers=N
     return job.run()
 
 
+def selbsttest():
+    """Kurzbericht, ob der Kern einsatzbereit ist.
+
+    Auf Android die einzige Möglichkeit, ohne Download zu sehen, ob die
+    Python-Laufzeit samt Abhängigkeiten wirklich hochkommt.
+    """
+    import platform
+
+    teile = [f"Python {platform.python_version()}"]
+    try:
+        import yt_dlp
+        teile.append(f"yt-dlp {yt_dlp.version.__version__}")
+    except Exception as e:
+        teile.append(f"yt-dlp FEHLT ({e})")
+    for name in ("requests", "mutagen"):
+        try:
+            __import__(name)
+            teile.append(name)
+        except Exception:
+            teile.append(f"{name} FEHLT")
+
+    from ytmd import tags
+    teile.append("Cover: " + ("ja" if tags.AVAILABLE else "nein"))
+    teile.append("FFmpeg: " + (utils.get_ffmpeg_path() or "System-PATH"))
+    return " · ".join(teile)
+
+
+def run_for_listener(playlist_file, target_folder, audio_format, workers, listener,
+                     cookies_from_browser=None, save_covers=True, ffmpeg_path=None):
+    """Einstieg für Android (Chaquopy).
+
+    Kotlin kann keine Python-Funktion als Rückruf übergeben, wohl aber ein
+    Objekt. Hier wird es auf die Callbacks des Kerns umgesetzt.
+    """
+    def status(index, state, detail=None):
+        text = detail[0] if isinstance(detail, tuple) else detail
+        listener.onStatus(index, state, str(text) if text else None)
+
+    ergebnis = run_playlist(
+        playlist_file, target_folder=target_folder, audio_format=audio_format,
+        workers=workers, cookies_from_browser=cookies_from_browser,
+        save_covers=save_covers, ffmpeg_path=ffmpeg_path,
+        on_status=status,
+        on_progress=lambda done, total: listener.onProgress(done, total))
+
+    zusammenfassung = (f"Geladen: {ergebnis.downloaded} · Übersprungen: "
+                       f"{ergebnis.skipped} · Fehler: {len(ergebnis.failed)} · "
+                       f"Cover: {ergebnis.covers}")
+    if ergebnis.stopped_reason:
+        zusammenfassung += (f"\nVorzeitig gestoppt ({ergebnis.stopped_reason}), "
+                            f"{ergebnis.remaining} Songs offen")
+    return zusammenfassung
+
+
 def _cli(argv=None):
     parser = argparse.ArgumentParser(
         prog="ytmd.headless",
