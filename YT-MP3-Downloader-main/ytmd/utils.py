@@ -7,8 +7,29 @@ import subprocess
 import sys
 
 
+# Von der Umgebung gesetzte Pfade. Auf dem Desktop werden sie hergeleitet, auf
+# Android reicht die App sie herein (dort gibt es weder /home noch sys._MEIPASS).
+_download_folder = None
+_ffmpeg_path = None
+
+
+def set_download_folder(path):
+    """Zielordner fest vorgeben statt ihn zu erraten."""
+    global _download_folder
+    _download_folder = path or None
+
+
+def set_ffmpeg_path(path):
+    """Ordner mit den FFmpeg-Programmen vorgeben."""
+    global _ffmpeg_path
+    _ffmpeg_path = path or None
+
+
 def get_download_folder():
     """Get the user's download folder cross-platform."""
+    if _download_folder:
+        return _download_folder
+
     # Try XDG user dirs (Linux with localized folder names)
     try:
         result = subprocess.run(
@@ -35,6 +56,8 @@ def get_download_folder():
 
 def get_ffmpeg_path():
     """Get FFmpeg path – bundled in PyInstaller EXE or system PATH."""
+    if _ffmpeg_path:
+        return _ffmpeg_path
     if getattr(sys, 'frozen', False):
         return os.path.join(sys._MEIPASS, 'ffmpeg')
     return None
