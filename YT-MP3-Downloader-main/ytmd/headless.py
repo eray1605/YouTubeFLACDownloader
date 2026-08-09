@@ -10,6 +10,7 @@ Auf dem Desktop lässt sich dieselbe Funktion über die Kommandozeile nutzen:
 """
 
 import argparse
+import os
 import sys
 
 from ytmd import config, utils
@@ -56,6 +57,58 @@ def run_playlist(playlist_file, target_folder=None, audio_format=None, workers=N
         on_progress=on_progress,
     )
     return job.run()
+
+
+def suche(query, limit=None):
+    """Suchergebnisse als JSON – Gegenstück zur Suchleiste der Desktop-App."""
+    import json
+
+    from ytmd.utils import format_duration
+    from ytmd.youtube import result_url, search_youtube, thumbnail_url
+
+    treffer = search_youtube(query, limit=limit or config.NUM_RESULTS)
+    return json.dumps([{
+        "title": r.get("title", ""),
+        "channel": r.get("channel") or r.get("uploader") or "",
+        "duration": format_duration(r.get("duration")),
+        "url": result_url(r),
+        "thumb": thumbnail_url(r),
+    } for r in treffer])
+
+
+def einzeln_laden(url, target_folder, audio_format="wav", ffmpeg_path=None):
+    """Einen einzelnen Song laden – wie das URL-Feld der Desktop-App."""
+    from ytmd.youtube import download_audio
+
+    if ffmpeg_path:
+        utils.set_ffmpeg_path(ffmpeg_path)
+    os.makedirs(target_folder, exist_ok=True)
+    download_audio(url, target_folder, audio_format=format_by_name(audio_format))
+    return "Fertig"
+
+
+def playlist_info(playlist_file, audio_format="wav", max_tracks=300):
+    """Kurzinfo für eine Oberfläche, als JSON.
+
+    Damit zeigt die Android-App dieselben Angaben wie die Desktop-Version:
+    Playlistname, Anzahl, geschätzter Platzbedarf und die Songliste.
+    """
+    import json
+
+    from ytmd.downloader import estimate_bytes
+    from ytmd.utils import format_duration, format_size
+
+    name, tracks = parse_playlist_file(playlist_file)
+    fmt = format_by_name(audio_format)
+    return json.dumps({
+        "name": name,
+        "count": len(tracks),
+        "size": format_size(estimate_bytes(tracks, fmt)),
+        "tracks": [{"title": t.title,
+                    "artist": t.artist,
+                    "duration": format_duration(t.duration)}
+                   for t in tracks[:max_tracks]],
+    })
 
 
 def selbsttest():
