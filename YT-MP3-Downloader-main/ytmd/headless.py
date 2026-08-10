@@ -23,10 +23,12 @@ def format_by_name(name):
     if not name:
         return config.DEFAULT_FORMAT
     gesucht = name.strip().lower()
+    if gesucht in ("original", "auto", "none", ""):
+        return next(f for f in config.AUDIO_FORMATS if f.codec is None)
     for audio_format in config.AUDIO_FORMATS:
         if audio_format.codec == gesucht or audio_format.label.lower() == gesucht:
             return audio_format
-    erlaubt = ", ".join(sorted({f.codec for f in config.AUDIO_FORMATS}))
+    erlaubt = ", ".join(sorted({f.codec or "original" for f in config.AUDIO_FORMATS}))
     raise ValueError(f"Unbekanntes Format {name!r}. Möglich: {erlaubt}")
 
 
@@ -158,8 +160,24 @@ def selbsttest():
 
     from ytmd import tags
     teile.append("Cover: " + ("ja" if tags.AVAILABLE else "nein"))
-    teile.append("FFmpeg: " + (utils.get_ffmpeg_path() or "System-PATH"))
+    if utils.ffmpeg_available():
+        teile.append("FFmpeg: ja")
+    else:
+        teile.append("ohne FFmpeg – Format \"Original\"")
     return " · ".join(teile)
+
+
+def formate():
+    """Wählbare Formate als JSON – ohne FFmpeg bleibt nur "Original"."""
+    import json
+
+    umwandeln = utils.ffmpeg_available()
+    return json.dumps([
+        {"name": f.codec or "original",
+         "label": f.label,
+         "available": bool(umwandeln or f.codec is None)}
+        for f in config.AUDIO_FORMATS
+    ])
 
 
 def run_for_listener(playlist_file, target_folder, audio_format, workers, listener,

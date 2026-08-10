@@ -59,6 +59,10 @@ class AudioFormat:
         return self.bytes_per_second * 60
 
 
+# Dateiendungen, unter denen eine Tonspur liegen kann. Ohne Umwandlung
+# bestimmt YouTube die Endung, nicht wir.
+AUDIO_EXTENSIONS = (".m4a", ".webm", ".opus", ".mp3", ".wav", ".flac", ".ogg", ".aac")
+
 AUDIO_FORMATS = (
     # 44,1 kHz, 16 Bit, Stereo = 176.400 Byte/s
     AudioFormat("WAV · unkomprimiert", "wav", 176_400,
@@ -66,6 +70,9 @@ AUDIO_FORMATS = (
     AudioFormat("FLAC · verlustfrei", "flac", 100_000),
     AudioFormat("MP3 · 320 kbps", "mp3", 40_000, quality="320"),
     AudioFormat("MP3 · 192 kbps", "mp3", 24_000, quality="192"),
+    # Ohne Umwandlung – die einzige Wahl, wenn kein FFmpeg vorhanden ist.
+    # YouTube liefert meist eine .m4a mit rund 130 kbit/s.
+    AudioFormat("Original · ohne Umwandlung", None, 16_000),
 )
 DEFAULT_FORMAT = AUDIO_FORMATS[0]
 

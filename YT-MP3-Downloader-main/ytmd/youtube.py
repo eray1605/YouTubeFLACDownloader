@@ -7,7 +7,7 @@ import re
 from yt_dlp import YoutubeDL
 
 from ytmd import config, verify
-from ytmd.utils import get_ffmpeg_path, sanitize_filename
+from ytmd.utils import audio_datei, get_ffmpeg_path, sanitize_filename
 
 
 class QuietLogger:
@@ -385,8 +385,8 @@ def download_audio(url, output_path, filename_base=None, should_cancel=None,
 
     if filename_base:
         safe = sanitize_filename(filename_base)
-        vorhanden = os.path.join(output_path, f"{safe}.{audio_format.codec}")
-        if os.path.exists(vorhanden):
+        vorhanden = audio_datei(output_path, safe, audio_format.codec)
+        if vorhanden:
             if verify.is_complete(vorhanden):
                 return True
             # Rest eines abgebrochenen Laufs – weg damit, sonst gilt die halbe
@@ -398,13 +398,6 @@ def download_audio(url, output_path, filename_base=None, should_cancel=None,
         outtmpl = os.path.join(output_path, safe.replace("%", "%%") + ".%(ext)s")
     else:
         outtmpl = os.path.join(output_path, "%(title)s.%(ext)s")
-
-    postprocessor = {
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': audio_format.codec,
-    }
-    if audio_format.quality:
-        postprocessor['preferredquality'] = audio_format.quality
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -419,10 +412,20 @@ def download_audio(url, output_path, filename_base=None, should_cancel=None,
         'fragment_retries': 5,
         'extractor_retries': 3,
         'socket_timeout': 30,
-        'postprocessors': [postprocessor],
     }
-    if audio_format.args:
-        ydl_opts['postprocessor_args'] = {'extractaudio': list(audio_format.args)}
+
+    # Ohne Codec wird nicht umgewandelt: Die Tonspur wird so gespeichert, wie
+    # YouTube sie liefert (meist .m4a). Das ist der einzige Weg ohne FFmpeg.
+    if audio_format.codec:
+        postprocessor = {
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': audio_format.codec,
+        }
+        if audio_format.quality:
+            postprocessor['preferredquality'] = audio_format.quality
+        ydl_opts['postprocessors'] = [postprocessor]
+        if audio_format.args:
+            ydl_opts['postprocessor_args'] = {'extractaudio': list(audio_format.args)}
     if cookies_from_browser:
         ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
     if throttle and config.SLEEP_BETWEEN[1]:

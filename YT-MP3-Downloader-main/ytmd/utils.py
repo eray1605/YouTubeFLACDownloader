@@ -63,6 +63,32 @@ def get_ffmpeg_path():
     return None
 
 
+def ffmpeg_available():
+    """Ist FFmpeg erreichbar? Ohne es geht nur "Original ohne Umwandlung"."""
+    ordner = get_ffmpeg_path()
+    if ordner:
+        return any(os.path.exists(os.path.join(ordner, name))
+                   for name in ("ffmpeg", "ffmpeg.exe"))
+    return shutil.which("ffmpeg") is not None
+
+
+def audio_datei(folder, filename_base, codec=None):
+    """Pfad einer vorhandenen Tonspur zu diesem Namen – oder None.
+
+    Ohne Umwandlung steht die Endung nicht vorher fest, deshalb werden alle
+    gängigen durchprobiert.
+    """
+    if codec:
+        pfad = os.path.join(folder, f"{filename_base}.{codec}")
+        return pfad if os.path.exists(pfad) else None
+    from ytmd import config
+    for endung in config.AUDIO_EXTENSIONS:
+        pfad = os.path.join(folder, filename_base + endung)
+        if os.path.exists(pfad):
+            return pfad
+    return None
+
+
 def resource_dir():
     """Ordner mit den mitgelieferten Dateien (Icons) – im EXE oder im Quellbaum."""
     if getattr(sys, 'frozen', False):

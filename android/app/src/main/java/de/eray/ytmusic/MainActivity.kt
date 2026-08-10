@@ -34,6 +34,7 @@ import org.json.JSONObject
 import java.io.File
 
 data class Song(val titel: String, val interpret: String, val dauer: String)
+data class Format(val name: String, val label: String, val verfuegbar: Boolean)
 data class Treffer(val titel: String, val kanal: String, val dauer: String,
                    val url: String, val bild: String)
 
@@ -82,7 +83,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun Oberflaeche(dunkel: Boolean, umschalten: () -> Unit) {
         val bereich = remember { mutableStateOf(0) }   // 0 = Suche, 1 = Playlist
-        var format by remember { mutableStateOf("wav") }
+        var format by remember { mutableStateOf("original") }
+        var formate by remember { mutableStateOf(listOf<Format>()) }
         var workers by remember { mutableStateOf(2) }
         var kernStatus by remember { mutableStateOf("Kern wird geprüft …") }
         var laeuft by remember { mutableStateOf(false) }
@@ -92,6 +94,19 @@ class MainActivity : ComponentActivity() {
             kernStatus = try {
                 python().callAttr("selbsttest").toString()
             } catch (e: Throwable) { "Kern nicht startbar: ${e.message}" }
+            // Ohne FFmpeg lässt sich nichts umwandeln – dann bietet der Kern nur
+            // "Original" an, und die Oberfläche zeigt die anderen ausgegraut.
+            try {
+                val j = JSONArray(python().callAttr("formate").toString())
+                formate = (0 until j.length()).map {
+                    val o = j.getJSONObject(it)
+                    Format(o.getString("name"), o.getString("label"),
+                           o.getBoolean("available"))
+                }
+                if (formate.none { it.name == format && it.verfuegbar }) {
+                    format = formate.firstOrNull { it.verfuegbar }?.name ?: "original"
+                }
+            } catch (_: Throwable) { }
         }
         LaunchedEffect(Unit) {
             while (true) {
@@ -113,8 +128,8 @@ class MainActivity : ComponentActivity() {
                     text = { Text("Playlist") })
             }
 
-            Einstellungen(format, { format = it }, workers, { workers = it }, laeuft,
-                          zeigeWorkers = bereich.value == 1)
+            Einstellungen(formate, format, { format = it }, workers, { workers = it },
+                          laeuft, zeigeWorkers = bereich.value == 1)
 
             ergebnis?.let {
                 Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -151,18 +166,28 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Einstellungen(format: String, setFormat: (String) -> Unit,
+    private fun Einstellungen(formate: List<Format>, format: String,
+                              setFormat: (String) -> Unit,
                               workers: Int, setWorkers: (Int) -> Unit,
                               laeuft: Boolean, zeigeWorkers: Boolean) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                listOf("wav", "flac", "mp3").forEach { f ->
-                    FilterChip(selected = format == f, onClick = { setFormat(f) },
-                               enabled = !laeuft, shape = RoundedCornerShape(10.dp),
-                               label = { Text(f.uppercase()) })
+                formate.distinctBy { it.name }.forEach { f ->
+                    FilterChip(selected = format == f.name, onClick = { setFormat(f.name) },
+                               // Ohne FFmpeg bleiben WAV/FLAC/MP3 ausgegraut,
+                               // statt still das Falsche zu tun.
+                               enabled = !laeuft && f.verfuegbar,
+                               shape = RoundedCornerShape(10.dp),
+                               label = { Text(if (f.name == "original") "Original"
+                                              else f.name.uppercase()) })
                 }
+            }
+            if (formate.any { !it.verfuegbar }) {
+                Text("Ohne FFmpeg wird nicht umgewandelt – die Tonspur wird so " +
+                     "gespeichert, wie YouTube sie liefert (.m4a).",
+                     fontSize = 11.sp, color = Farben.Warnung)
             }
             if (zeigeWorkers) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),

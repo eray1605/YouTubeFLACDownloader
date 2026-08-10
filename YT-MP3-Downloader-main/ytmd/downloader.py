@@ -21,7 +21,7 @@ from ytmd import config
 from ytmd import tags, verify
 from ytmd.albumart import find_cover_url
 from ytmd.covers import fetch_cover
-from ytmd.utils import free_bytes, get_download_folder, sanitize_filename
+from ytmd.utils import audio_datei, free_bytes, get_download_folder, sanitize_filename
 from ytmd.youtube import (FATAL_ERRORS, NO_MATCH, RETRY_SAME_VIDEO, DownloadCancelled,
                           TrackError, classify_error, download_audio, find_matches,
                           result_url, thumbnail_url)
@@ -121,13 +121,16 @@ class PlaylistDownloader:
         inzwischen an einer anderen Stelle steht.
         """
         found = {}
-        suffix = "." + self.audio_format.codec
+        # Ohne Umwandlung bestimmt YouTube die Endung, deshalb alle zulassen
+        suffixe = (["." + self.audio_format.codec] if self.audio_format.codec
+                   else list(config.AUDIO_EXTENSIONS))
         try:
             names = os.listdir(folder)
         except OSError:
             return found
         for name in names:
-            if not name.lower().endswith(suffix.lower()):
+            suffix = next((s for s in suffixe if name.lower().endswith(s)), None)
+            if suffix is None:
                 continue
             # Halbe Datei aus einem abgebrochenen Lauf gilt nicht als erledigt
             if not verify.is_complete(os.path.join(folder, name)):
@@ -150,7 +153,10 @@ class PlaylistDownloader:
         if not old_name:
             return False
 
-        wanted = safe_name + "." + self.audio_format.codec
+        # Ohne Umwandlung behält die Datei ihre eigene Endung
+        endung = ("." + self.audio_format.codec if self.audio_format.codec
+                  else os.path.splitext(old_name)[1])
+        wanted = safe_name + endung
         if old_name != wanted:
             old_path = os.path.join(folder, old_name)
             new_path = os.path.join(folder, wanted)
@@ -264,8 +270,8 @@ class PlaylistDownloader:
         """Cover in die Audiodatei einbetten: Spotify-Bild, sonst YouTube-Bild."""
         if not self.save_covers or not tags.AVAILABLE:
             return
-        path = os.path.join(folder, filename_base + "." + self.audio_format.codec)
-        if not os.path.exists(path) or tags.has_cover(path):
+        path = audio_datei(folder, filename_base, self.audio_format.codec)
+        if not path or tags.has_cover(path):
             return
 
         # 1. Bild aus dem Export, 2. echtes Albumcover, 3. YouTube-Vorschaubild.
