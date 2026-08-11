@@ -19,6 +19,8 @@ DURATION_KEYS = ("track duration (ms)", "duration (ms)", "duration_ms", "duratio
                  "durationms", "track duration", "duration", "length", "time")
 IMAGE_KEYS = ("album image url", "image url", "cover url", "artwork url",
               "images", "image", "cover", "artwork", "thumbnail")
+DATE_KEYS = ("album release date", "release date", "released", "year",
+             "release_date", "date")
 
 # Schlüssel, unter denen die Trackliste in einer JSON-Datei stecken kann
 LIST_KEYS = ("items", "tracks", "songs", "playlist", "entries", "data")
@@ -44,6 +46,7 @@ class Track:
     album: str = ""
     duration: Optional[float] = None  # Sekunden
     image_url: str = ""               # Cover aus dem Export
+    released: str = ""                # Erscheinungsdatum, z. B. "1991-09-24"
 
     @property
     def label(self):
@@ -195,6 +198,7 @@ def _extract_track(obj):
         album=_names_to_text(album),
         duration=_parse_duration(dur_key, dur_value) if dur_key else None,
         image_url=_extract_image(d),
+        released=str(_first_value(d, DATE_KEYS)[1] or "").strip(),
     )
 
 

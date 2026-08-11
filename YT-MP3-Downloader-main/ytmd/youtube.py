@@ -401,6 +401,9 @@ def download_audio(url, output_path, filename_base=None, should_cancel=None,
 
     ydl_opts = {
         'format': 'bestaudio/best',
+        # Ausdrücklich nach Bitrate und Abtastrate sortieren, damit immer die
+        # beste Tonspur gewählt wird und nicht die zuerst gelistete.
+        'format_sort': ['abr', 'asr'],
         'outtmpl': outtmpl,
         'quiet': True,
         'no_warnings': True,

@@ -64,9 +64,11 @@ class AudioFormat:
 AUDIO_EXTENSIONS = (".m4a", ".webm", ".opus", ".mp3", ".wav", ".flac", ".ogg", ".aac")
 
 AUDIO_FORMATS = (
-    # 44,1 kHz, 16 Bit, Stereo = 176.400 Byte/s
-    AudioFormat("WAV · unkomprimiert", "wav", 176_400,
-                args=("-ar", "44100", "-ac", "2", "-sample_fmt", "s16")),
+    # 16 Bit, Abtastrate der Quelle. YouTubes beste Spur ist Opus mit 48 kHz –
+    # sie auf 44,1 kHz zu rechnen kostet Qualität und bringt nichts.
+    # 48 kHz, 16 Bit, Stereo = 192.000 Byte/s
+    AudioFormat("WAV · unkomprimiert", "wav", 192_000,
+                args=("-sample_fmt", "s16")),
     AudioFormat("FLAC · verlustfrei", "flac", 100_000),
     AudioFormat("MP3 · 320 kbps", "mp3", 40_000, quality="320"),
     AudioFormat("MP3 · 192 kbps", "mp3", 24_000, quality="192"),

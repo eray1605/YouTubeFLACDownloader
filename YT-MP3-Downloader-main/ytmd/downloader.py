@@ -212,6 +212,7 @@ class PlaylistDownloader:
         # Schon aus einem früheren Lauf vorhanden? Dann nichts erneut laden.
         if self._reuse_existing(folder, filename_base):
             # Cover kann trotzdem fehlen, wenn der Song vor dieser Funktion kam
+            self._write_tags(track, folder, filename_base, index)
             self._save_cover(track, folder, filename_base, result)
             with self._lock:
                 result.skipped += 1
@@ -230,6 +231,7 @@ class PlaylistDownloader:
         self._status(index, SEARCHING)
         try:
             existed, candidate = self._download_track(index, track, folder, filename_base)
+            self._write_tags(track, folder, filename_base, index)
             self._save_cover(track, folder, filename_base, result, candidate)
             with self._lock:
                 self._streak = 0
@@ -265,6 +267,21 @@ class PlaylistDownloader:
         # Sicherheitsnetz, falls das Laufwerk während des Downloads volllief
         if free_bytes(folder) < config.DISK_RESERVE_BYTES:
             self._stop_reason = DISK_FULL
+
+    def _write_tags(self, track, folder, filename_base, index):
+        """Titel, Interpret, Album und Datum eintragen.
+
+        Ohne das zeigt jeder Player "Unknown", obwohl die Angaben im Export
+        stehen. Läuft auch für schon vorhandene Dateien, die noch keine haben.
+        """
+        if not tags.AVAILABLE:
+            return
+        path = audio_datei(folder, filename_base, self.audio_format.codec)
+        if not path or tags.has_tags(path):
+            return
+        tags.write_tags(path, title=track.title, artist=track.artist,
+                        album=track.album, released=track.released,
+                        track_number=index + 1)
 
     def _save_cover(self, track, folder, filename_base, result, candidate=None):
         """Cover in die Audiodatei einbetten: Spotify-Bild, sonst YouTube-Bild."""

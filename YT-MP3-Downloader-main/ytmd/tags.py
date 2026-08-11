@@ -51,6 +51,107 @@ def has_cover(path):
     return False
 
 
+def has_tags(path):
+    """Steht schon ein Titel drin? Dann muss nichts erneut geschrieben werden."""
+    if not AVAILABLE:
+        return False
+    try:
+        import mutagen
+        datei = mutagen.File(path)
+        if datei is None or not datei.tags:
+            return False
+    except Exception:
+        return False
+
+    # Jeden Schlüssel einzeln absichern: FLAC wirft bei fremden Namen wie
+    # "\xa9nam" eine Ausnahme, statt einfach nichts zu liefern – ein
+    # gemeinsames except würde die Prüfung vorzeitig abbrechen.
+    for schluessel in ("TIT2", "\xa9nam", "title", "TITLE"):
+        try:
+            if datei.tags.get(schluessel):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def write_tags(path, title="", artist="", album="", released="", track_number=None):
+    """Titel, Interpret, Album und Datum in die Datei schreiben.
+
+    Ohne das zeigt jeder Player "Unknown". Jedes Format hat dafür eigene
+    Feldnamen – ID3 bei MP3 und WAV, eigene Kürzel bei MP4, Klartext bei FLAC.
+    """
+    if not AVAILABLE or not (title or artist or album):
+        return False
+
+    jahr = str(released or "")[:10]
+    suffix = os.path.splitext(path)[1].lower()
+    try:
+        if suffix in MP4_ENDUNGEN:
+            audio = MP4(path)
+            if title:
+                audio["\xa9nam"] = [title]
+            if artist:
+                audio["\xa9ART"] = [artist]
+            if album:
+                audio["\xa9alb"] = [album]
+            if jahr:
+                audio["\xa9day"] = [jahr]
+            if track_number:
+                audio["trkn"] = [(int(track_number), 0)]
+            audio.save()
+            return True
+
+        if suffix == ".flac":
+            audio = FLAC(path)
+            if title:
+                audio["title"] = title
+            if artist:
+                audio["artist"] = artist
+            if album:
+                audio["album"] = album
+            if jahr:
+                audio["date"] = jahr
+            if track_number:
+                audio["tracknumber"] = str(track_number)
+            audio.save()
+            return True
+
+        # MP3 und WAV teilen sich ID3
+        from mutagen.id3 import TALB, TDRC, TIT2, TPE1, TRCK
+        if suffix == ".wav":
+            audio = WAVE(path)
+            if audio.tags is None:
+                audio.add_tags()
+            marken = audio.tags
+        elif suffix == ".mp3":
+            try:
+                marken = ID3(path)
+            except ID3NoHeaderError:
+                marken = ID3()
+        else:
+            return False
+
+        if title:
+            marken.setall("TIT2", [TIT2(encoding=3, text=[title])])
+        if artist:
+            marken.setall("TPE1", [TPE1(encoding=3, text=[artist])])
+        if album:
+            marken.setall("TALB", [TALB(encoding=3, text=[album])])
+        if jahr:
+            marken.setall("TDRC", [TDRC(encoding=3, text=[jahr])])
+        if track_number:
+            marken.setall("TRCK", [TRCK(encoding=3, text=[str(track_number)])])
+
+        if suffix == ".wav":
+            audio.save()
+        else:
+            marken.save(path)
+        return True
+    except Exception:
+        return False
+
+
 def embed_cover(path, image):
     """Bild als Cover in die Audiodatei schreiben. True bei Erfolg."""
     if not AVAILABLE or not image:
