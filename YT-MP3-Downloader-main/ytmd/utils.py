@@ -85,11 +85,22 @@ def _ffmpeg_suchen():
 
 
 def get_ffmpeg_path():
-    """Get FFmpeg path – bundled in PyInstaller EXE or system PATH."""
+    """Ordner mit den FFmpeg-Programmen – im Paket mitgeliefert oder im System.
+
+    Im gepackten Programm liegen die Beigaben im Wurzelverzeichnis des
+    entpackten Pakets, nicht in einem Unterordner "ffmpeg". Unter Linux und
+    macOS heißt die Datei dort schlicht "ffmpeg", weshalb der falsche Pfad
+    zufällig die Datei selbst traf; unter Windows heißt sie "ffmpeg.exe" und
+    der Pfad zeigte ins Leere.
+    """
     if _ffmpeg_path:
         return _ffmpeg_path
     if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, 'ffmpeg')
+        paket = getattr(sys, '_MEIPASS', None)
+        if paket and any(os.path.exists(os.path.join(paket, name))
+                         for name in ("ffmpeg.exe", "ffmpeg")):
+            return paket
+        # Nichts mitgeliefert – dann wie bei der Quellfassung im System suchen
     return _ffmpeg_suchen()
 
 

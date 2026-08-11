@@ -89,6 +89,7 @@ jobs:
             --hidden-import="tkinter" \
             --collect-all customtkinter \
             --add-binary "$FFMPEG_DIR/ffmpeg.exe;." \
+            --add-binary "$FFMPEG_DIR/ffprobe.exe;." \
             --add-data "temp_icon.ico;." \
             --add-data "icon.png;." \
             main.py
@@ -105,6 +106,7 @@ jobs:
             --hidden-import="tkinter" \
             --collect-all customtkinter \
             --add-binary "${{ steps.ffmpeg_unix.outputs.dir }}/ffmpeg:." \
+            --add-binary "${{ steps.ffmpeg_unix.outputs.dir }}/ffprobe:." \
             --add-data "temp_icon.ico:." \
             --add-data "icon.png:." \
             main.py
@@ -121,6 +123,7 @@ jobs:
             --hidden-import="tkinter" \
             --collect-all customtkinter \
             --add-binary "${{ steps.ffmpeg_unix.outputs.dir }}/ffmpeg:." \
+            --add-binary "${{ steps.ffmpeg_unix.outputs.dir }}/ffprobe:." \
             --add-data "temp_icon.ico:." \
             --add-data "icon.png:." \
             main.py
