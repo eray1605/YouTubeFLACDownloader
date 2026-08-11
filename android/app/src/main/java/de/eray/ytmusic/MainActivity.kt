@@ -125,8 +125,11 @@ class MainActivity : ComponentActivity() {
                 val j = JSONArray(python().callAttr("formate").toString())
                 formate = (0 until j.length()).map {
                     val o = j.getJSONObject(it)
-                    Format(o.getString("name"), o.getString("label"),
-                           o.getBoolean("available"))
+                    val name = o.getString("name")
+                    Format(name, o.getString("label"),
+                           // WAV geht auch ohne FFmpeg: Android bringt eigene
+                           // Dekoder mit, umgewandelt wird nach dem Download.
+                           o.getBoolean("available") || name == "wav")
                 }
                 if (formate.none { it.name == format && it.verfuegbar }) {
                     format = formate.firstOrNull { it.verfuegbar }?.name ?: "original"
@@ -240,9 +243,47 @@ class MainActivity : ComponentActivity() {
                                               else f.name.uppercase()) })
                 }
             }
+            // Für Songs, die schon ohne Umwandlung auf dem Gerät liegen
+            if (format == "wav") {
+                var stand by remember { mutableStateOf<String?>(null) }
+                val bereich = rememberCoroutineScope()
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = {
+                            bereich.launch {
+                                stand = withContext(Dispatchers.IO) {
+                                    val offen = zielOrdner().listFiles()
+                                        ?.filter { it.isFile && WavKonverter.kandidat(it) }
+                                        ?: emptyList()
+                                    if (offen.isEmpty()) "Nichts umzuwandeln"
+                                    else {
+                                        var ok = 0
+                                        offen.forEach {
+                                            if (WavKonverter.nachWav(it) != null) ok++
+                                        }
+                                        "Umgewandelt: $ok von ${offen.size}"
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !laeuft, shape = RoundedCornerShape(10.dp)) {
+                        Text("Vorhandene nach WAV wandeln", fontSize = 12.sp)
+                    }
+                    stand?.let {
+                        Text(it, fontSize = 11.sp,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
             if (formate.any { !it.verfuegbar }) {
-                Text("Ohne FFmpeg wird nicht umgewandelt – die Tonspur wird so " +
-                     "gespeichert, wie YouTube sie liefert (.m4a).",
+                Text(if (format == "wav")
+                         "WAV wird nach dem Download auf dem Gerät erzeugt – das " +
+                         "dauert etwas länger und braucht rund zehnmal mehr Platz."
+                     else
+                         "FLAC und MP3 brauchen FFmpeg, das es auf Android nicht " +
+                         "gibt. Möglich sind \"Original\" (.m4a) und WAV.",
                      fontSize = 11.sp, color = Farben.Warnung)
             }
             if (zeigeWorkers) {

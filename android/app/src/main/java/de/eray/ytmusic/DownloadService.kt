@@ -83,6 +83,9 @@ class DownloadService : Service() {
                 Fortschritt.ergebnis = ergebnis.toString()
             } catch (e: Throwable) {
                 Fortschritt.ergebnis = "Fehler: ${e.message}"
+                // Auf dem Gerät nachträglich nach WAV wandeln – FFmpeg gibt es
+                // hier nicht, wohl aber die Dekoder des Systems.
+                if (format == "wav") umwandeln(ziel)
             } finally {
                 medienIndexAktualisieren(ziel)
                 Fortschritt.laeuft = false
@@ -91,6 +94,29 @@ class DownloadService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * Geladene Tonspuren nach WAV wandeln. Wird nach dem Download aufgerufen,
+     * damit ein Abbruch nichts kaputt macht: Bereits gewandelte Dateien sind
+     * weg, der Rest wird beim nächsten Lauf nachgeholt.
+     */
+    private fun umwandeln(ordner: String) {
+        val offen = java.io.File(ordner).listFiles()
+            ?.filter { it.isFile && WavKonverter.kandidat(it) } ?: return
+        if (offen.isEmpty()) return
+
+        Fortschritt.ergebnis = (Fortschritt.ergebnis ?: "") +
+            "\nWandle ${offen.size} Dateien nach WAV …"
+        var fertig = 0
+        var gescheitert = 0
+        offen.forEachIndexed { i, datei ->
+            aktualisieren("Wandle ${i + 1}/${offen.size} nach WAV …")
+            Fortschritt.letzterSong = datei.name
+            if (WavKonverter.nachWav(datei) != null) fertig++ else gescheitert++
+        }
+        Fortschritt.ergebnis = (Fortschritt.ergebnis ?: "") +
+            "\nUmgewandelt: $fertig" + if (gescheitert > 0) " · fehlgeschlagen: $gescheitert" else ""
     }
 
     /**
