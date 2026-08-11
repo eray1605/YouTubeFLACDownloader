@@ -26,9 +26,13 @@ def format_by_name(name):
     if gesucht in ("original", "auto", "none", ""):
         return next(f for f in config.AUDIO_FORMATS if f.codec is None)
     for audio_format in config.AUDIO_FORMATS:
-        if audio_format.codec == gesucht or audio_format.label.lower() == gesucht:
+        if gesucht in (audio_format.kennung, audio_format.label.lower()):
             return audio_format
-    erlaubt = ", ".join(sorted({f.codec or "original" for f in config.AUDIO_FORMATS}))
+    # "wav" und "mp3" ohne Zusatz treffen den erstbesten Eintrag
+    for audio_format in config.AUDIO_FORMATS:
+        if audio_format.codec == gesucht:
+            return audio_format
+    erlaubt = ", ".join(f.kennung for f in config.AUDIO_FORMATS)
     raise ValueError(f"Unbekanntes Format {name!r}. Möglich: {erlaubt}")
 
 
@@ -209,7 +213,7 @@ def formate():
 
     umwandeln = utils.ffmpeg_available()
     return json.dumps([
-        {"name": f.codec or "original",
+        {"name": f.kennung,
          "label": f.label,
          "available": bool(umwandeln or f.codec is None)}
         for f in config.AUDIO_FORMATS

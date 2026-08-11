@@ -53,6 +53,13 @@ class AudioFormat:
     bytes_per_second: int
     quality: Optional[str] = None          # nur für verlustbehaftete Codecs
     args: Tuple[str, ...] = field(default_factory=tuple)
+    # Auswahlname, wenn mehrere Einträge dieselbe Dateiendung benutzen
+    name: Optional[str] = None
+
+    @property
+    def kennung(self):
+        """Eindeutiger Name für Auswahl und Oberfläche."""
+        return self.name or self.codec or "original"
 
     @property
     def per_minute(self):
@@ -69,9 +76,14 @@ AUDIO_FORMATS = (
     # 48 kHz, 16 Bit, Stereo = 192.000 Byte/s
     AudioFormat("WAV · unkomprimiert", "wav", 192_000,
                 args=("-sample_fmt", "s16")),
+    # Audio-CDs sind auf 44,1 kHz festgelegt. Wer brennen will, braucht diese
+    # Fassung – sonst muss das Brennprogramm selbst umrechnen.
+    AudioFormat("WAV · CD-tauglich (44,1 kHz)", "wav", 176_400,
+                args=("-ar", "44100", "-ac", "2", "-sample_fmt", "s16"),
+                name="wav-cd"),
     AudioFormat("FLAC · verlustfrei", "flac", 100_000),
     AudioFormat("MP3 · 320 kbps", "mp3", 40_000, quality="320"),
-    AudioFormat("MP3 · 192 kbps", "mp3", 24_000, quality="192"),
+    AudioFormat("MP3 · 192 kbps", "mp3", 24_000, quality="192", name="mp3-192"),
     # Ohne Umwandlung – die einzige Wahl, wenn kein FFmpeg vorhanden ist.
     # YouTube liefert meist eine .m4a mit rund 130 kbit/s.
     AudioFormat("Original · ohne Umwandlung", None, 16_000),
