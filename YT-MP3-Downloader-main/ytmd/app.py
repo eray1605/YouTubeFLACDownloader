@@ -781,9 +781,12 @@ class App(ctk.CTk):
                     "-> 1-2 Stunden warten, \"Gleichzeitig\" auf 1 stellen und bei "
                     "\"Cookies\" den Browser wählen, in dem du bei YouTube angemeldet bist.")
         if reason == youtube.FFMPEG_MISSING:
-            return ("FFmpeg wurde nicht gefunden – ohne das lässt sich keine Audiodatei "
-                    f"erzeugen. {fehlen}\n\n"
-                    "-> FFmpeg installieren und im PATH verfügbar machen.")
+            return ("FFmpeg wurde nicht gefunden – ohne das lässt sich nicht in WAV, "
+                    f"FLAC oder MP3 umwandeln. {fehlen}\n\n"
+                    "-> Entweder FFmpeg installieren (und die App danach neu starten, "
+                    "damit sie den Pfad sieht),\n"
+                    "-> oder als Format \"Original\" wählen: Dann wird die Tonspur so "
+                    "gespeichert, wie YouTube sie liefert – ohne Umwandlung.")
         if reason == downloader.MASS_FAILURE:
             return (f"{config.MAX_CONSECUTIVE_FAILURES} Songs sind hintereinander "
                     f"fehlgeschlagen – da stimmt etwas Grundsätzliches nicht. {fehlen}\n\n"

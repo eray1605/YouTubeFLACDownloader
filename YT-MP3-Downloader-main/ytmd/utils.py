@@ -54,13 +54,43 @@ def get_download_folder():
     return home
 
 
+# Übliche Installationsorte unter Windows, falls der PATH nichts hergibt
+FFMPEG_ORTE = (
+    r"C:\ffmpeg",
+    r"C:\Program Files\ffmpeg",
+    r"C:\ProgramData\chocolatey\bin",
+    os.path.expanduser(r"~\scoop\shims"),
+)
+
+
+def _ffmpeg_suchen():
+    """Ordner mit ffmpeg finden – erst über den PATH, dann an bekannten Orten.
+
+    yt-dlp sucht sonst selbst im PATH des laufenden Prozesses. Startet die App
+    aus einer Umgebung ohne den Eintrag, scheitert die Umwandlung, obwohl
+    ffmpeg installiert ist. Deshalb wird der Pfad hier bestimmt und
+    ausdrücklich übergeben.
+    """
+    gefunden = shutil.which("ffmpeg")
+    if gefunden:
+        return os.path.dirname(gefunden)
+
+    for ort in FFMPEG_ORTE:
+        if not os.path.isdir(ort):
+            continue
+        for wurzel, _, dateien in os.walk(ort):
+            if any(d.lower() in ("ffmpeg.exe", "ffmpeg") for d in dateien):
+                return wurzel
+    return None
+
+
 def get_ffmpeg_path():
     """Get FFmpeg path – bundled in PyInstaller EXE or system PATH."""
     if _ffmpeg_path:
         return _ffmpeg_path
     if getattr(sys, 'frozen', False):
         return os.path.join(sys._MEIPASS, 'ffmpeg')
-    return None
+    return _ffmpeg_suchen()
 
 
 def ffmpeg_available():
