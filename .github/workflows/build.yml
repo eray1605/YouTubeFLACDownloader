@@ -68,11 +68,17 @@ jobs:
         id: ffmpeg_win
         shell: powershell
         run: |
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          $ffmpegPath = (Get-Command ffmpeg).Source
-          $ffmpegDir = Split-Path $ffmpegPath
+          # (Get-Command ffmpeg).Source liefert den Chocolatey-Platzhalter: ein
+          # ~380 KB großes Startprogramm, das auf die echte Datei im
+          # Chocolatey-Ordner verweist. Eingepackt ist er wertlos, weil dieser
+          # Ordner auf fremden Rechnern fehlt. Also die echte Datei suchen.
+          $echt = Get-ChildItem "C:\ProgramData\chocolatey\lib" -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Length -gt 10MB } |
+                  Sort-Object Length -Descending | Select-Object -First 1
+          if (-not $echt) { throw "Kein echtes ffmpeg.exe gefunden - nur Platzhalter?" }
+          $ffmpegDir = $echt.DirectoryName
           echo "dir=$ffmpegDir" >> $env:GITHUB_OUTPUT
-          echo "FFmpeg found at: $ffmpegDir"
+          echo "FFmpeg found at: $ffmpegDir ($([math]::Round($echt.Length/1MB)) MB)"
 
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'

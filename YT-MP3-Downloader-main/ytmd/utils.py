@@ -63,6 +63,41 @@ FFMPEG_ORTE = (
 )
 
 
+_ffmpeg_geprueft = {}
+
+
+def ffmpeg_laeuft(ordner):
+    """Läuft das ffmpeg in diesem Ordner wirklich?
+
+    Im Paket kann ein Platzhalter stecken, der nur auf dem Build-Rechner
+    funktioniert – etwa die Startprogramme von Chocolatey, die auf einen
+    Ordner verweisen, den es woanders nicht gibt. Vorhandensein der Datei
+    sagt also nichts; nur ein Aufruf klärt es.
+    """
+    if not ordner:
+        return False
+    if ordner in _ffmpeg_geprueft:
+        return _ffmpeg_geprueft[ordner]
+
+    ergebnis = False
+    for name in ("ffmpeg.exe", "ffmpeg"):
+        pfad = os.path.join(ordner, name)
+        if not os.path.exists(pfad):
+            continue
+        try:
+            # Ohne das blitzt unter Windows ein Konsolenfenster auf
+            ohne_fenster = 0x08000000 if sys.platform == "win32" else 0
+            fertig = subprocess.run([pfad, "-version"], capture_output=True,
+                                    timeout=20, creationflags=ohne_fenster)
+            ergebnis = fertig.returncode == 0
+        except Exception:
+            ergebnis = False
+        break
+
+    _ffmpeg_geprueft[ordner] = ergebnis
+    return ergebnis
+
+
 def _ffmpeg_suchen():
     """Ordner mit ffmpeg finden – erst über den PATH, dann an bekannten Orten.
 
@@ -97,19 +132,18 @@ def get_ffmpeg_path():
         return _ffmpeg_path
     if getattr(sys, 'frozen', False):
         paket = getattr(sys, '_MEIPASS', None)
-        if paket and any(os.path.exists(os.path.join(paket, name))
-                         for name in ("ffmpeg.exe", "ffmpeg")):
+        # Nur nehmen, wenn es dort auch wirklich startet – sonst wie bei der
+        # Quellfassung im System suchen.
+        if ffmpeg_laeuft(paket):
             return paket
-        # Nichts mitgeliefert – dann wie bei der Quellfassung im System suchen
     return _ffmpeg_suchen()
 
 
 def ffmpeg_available():
-    """Ist FFmpeg erreichbar? Ohne es geht nur "Original ohne Umwandlung"."""
+    """Ist FFmpeg wirklich benutzbar? Ohne es geht nur "Original"."""
     ordner = get_ffmpeg_path()
     if ordner:
-        return any(os.path.exists(os.path.join(ordner, name))
-                   for name in ("ffmpeg", "ffmpeg.exe"))
+        return ffmpeg_laeuft(ordner)
     return shutil.which("ffmpeg") is not None
 
 
