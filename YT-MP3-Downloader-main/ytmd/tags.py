@@ -11,10 +11,14 @@ import os
 try:
     from mutagen.flac import FLAC, Picture
     from mutagen.id3 import APIC, ID3, ID3NoHeaderError
+    from mutagen.mp4 import MP4, MP4Cover
     from mutagen.wave import WAVE
     AVAILABLE = True
 except ImportError:  # ohne mutagen läuft alles weiter, nur ohne Cover
     AVAILABLE = False
+
+# MP4/M4A speichert das Cover in einem eigenen Feld, nicht als ID3
+MP4_ENDUNGEN = (".m4a", ".mp4", ".m4b")
 
 COVER_FRONT = 3  # ID3-Bildtyp "Cover (front)"
 
@@ -33,6 +37,8 @@ def has_cover(path):
         return False
     suffix = os.path.splitext(path)[1].lower()
     try:
+        if suffix in MP4_ENDUNGEN:
+            return bool(MP4(path).get("covr"))
         if suffix == ".flac":
             return bool(FLAC(path).pictures)
         if suffix == ".wav":
@@ -55,6 +61,15 @@ def embed_cover(path, image):
 
     suffix = os.path.splitext(path)[1].lower()
     try:
+        if suffix in MP4_ENDUNGEN:
+            audio = MP4(path)
+            audio["covr"] = [MP4Cover(
+                image,
+                imageformat=(MP4Cover.FORMAT_PNG if mime == "image/png"
+                             else MP4Cover.FORMAT_JPEG))]
+            audio.save()
+            return True
+
         if suffix == ".flac":
             audio = FLAC(path)
             audio.clear_pictures()
