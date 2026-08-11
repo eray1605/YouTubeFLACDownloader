@@ -2,7 +2,10 @@ package de.eray.ytmusic
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -65,8 +68,30 @@ class MainActivity : ComponentActivity() {
         return ziel.absolutePath
     }
 
-    private fun zielOrdner(): File =
-        File(getExternalFilesDir(null), "Musik").apply { mkdirs() }
+    /** Darf die App überall schreiben? Erst dann ist der Musikordner erreichbar. */
+    fun vollzugriff(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
+    /**
+     * Zielordner. Mit Vollzugriff der öffentliche Musikordner – nur dort finden
+     * Dateimanager und Musik-Apps die Songs. Ohne Vollzugriff bleibt nur der
+     * App-Ordner unter Android/data, den seit Android 11 niemand mehr öffnen kann.
+     */
+    fun zielOrdner(): File = (
+        if (vollzugriff())
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                 "YT Music Downloader")
+        else
+            File(getExternalFilesDir(null), "Musik")
+        ).apply { mkdirs() }
+
+    fun zugriffAnfragen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            startActivity(Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName")))
+        }
+    }
 
     private fun starten(block: Intent.() -> Unit) {
         startForegroundService(Intent(this, DownloadService::class.java).apply {
@@ -118,6 +143,7 @@ class MainActivity : ComponentActivity() {
 
         Column(Modifier.fillMaxSize()) {
             Kopfzeile(dunkel, umschalten, kernStatus)
+            Speicherort()
 
             TabRow(selectedTabIndex = bereich.value,
                    containerColor = MaterialTheme.colorScheme.background,
@@ -161,6 +187,36 @@ class MainActivity : ComponentActivity() {
                 Text(status, fontSize = 10.sp,
                      color = MaterialTheme.colorScheme.onSurfaceVariant,
                      maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+
+    /**
+     * Zeigt den Zielordner an – und bietet den Vollzugriff an, solange die Songs
+     * in Android/data landen würden, wo kein Dateimanager hinkommt.
+     */
+    @Composable
+    private fun Speicherort() {
+        var erlaubt by remember { mutableStateOf(vollzugriff()) }
+        // Nach der Rückkehr aus den Einstellungen neu prüfen
+        LaunchedEffect(Unit) {
+            while (true) { erlaubt = vollzugriff(); delay(1000) }
+        }
+
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+               verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Speicherort: " + zielOrdner().absolutePath
+                     .removePrefix("/storage/emulated/0/"),
+                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!erlaubt) {
+                Text("Ohne Dateizugriff landen die Songs in einem Ordner, den " +
+                     "Dateimanager seit Android 11 nicht mehr öffnen können.",
+                     fontSize = 11.sp, color = Farben.Warnung)
+                Button(onClick = { zugriffAnfragen() },
+                       shape = RoundedCornerShape(10.dp),
+                       colors = ButtonDefaults.buttonColors(containerColor = Farben.Warnung)) {
+                    Text("Dateizugriff erlauben", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

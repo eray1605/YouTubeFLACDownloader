@@ -84,12 +84,26 @@ class DownloadService : Service() {
             } catch (e: Throwable) {
                 Fortschritt.ergebnis = "Fehler: ${e.message}"
             } finally {
+                medienIndexAktualisieren(ziel)
                 Fortschritt.laeuft = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * Neue Dateien beim Medienindex anmelden. Ohne das liegen die Songs zwar im
+     * Musikordner, tauchen aber in keiner Musik-App auf, bis Android irgendwann
+     * von selbst nachsieht.
+     */
+    private fun medienIndexAktualisieren(ordner: String) {
+        val dateien = java.io.File(ordner).walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".part") }
+            .map { it.absolutePath }.toList().toTypedArray()
+        if (dateien.isEmpty()) return
+        android.media.MediaScannerConnection.scanFile(this, dateien, null, null)
     }
 
     private fun kanalAnlegen() {
