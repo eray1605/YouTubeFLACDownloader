@@ -137,6 +137,42 @@ def playlist_info(playlist_file, audio_format="wav", max_tracks=300):
     })
 
 
+def cover_lesen(pfad):
+    """Eingebettetes Cover als Bytes – oder None.
+
+    Wird beim Umwandeln auf dem Telefon gebraucht: Das Bild muss vor der
+    Umwandlung gesichert und danach wieder eingesetzt werden, weil aus der
+    Tonspur nur rohe Abtastwerte entstehen.
+    """
+    try:
+        import mutagen
+        datei = mutagen.File(pfad)
+        if datei is None or not getattr(datei, "tags", None):
+            return None
+        # MP4 legt das Bild unter "covr" ab, ID3 unter "APIC:"
+        covr = datei.tags.get("covr")
+        if covr:
+            return bytes(covr[0])
+        for schluessel in datei.tags.keys():
+            if str(schluessel).startswith("APIC"):
+                return datei.tags[schluessel].data
+        bilder = getattr(datei, "pictures", None)
+        if bilder:
+            return bilder[0].data
+    except Exception:
+        return None
+    return None
+
+
+def cover_schreiben(pfad, daten):
+    """Cover in eine Datei einbetten. True bei Erfolg."""
+    from ytmd import tags
+
+    if not daten:
+        return False
+    return tags.embed_cover(pfad, bytes(daten))
+
+
 def selbsttest():
     """Kurzbericht, ob der Kern einsatzbereit ist.
 
