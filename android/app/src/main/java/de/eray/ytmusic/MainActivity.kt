@@ -269,7 +269,7 @@ class MainActivity : ComponentActivity() {
                                     else {
                                         var ok = 0
                                         offen.forEach {
-                                            if (WavKonverter.nachWav(it) != null) ok++
+                                            if (WavKonverter.nachWavMitCover(it) != null) ok++
                                         }
                                         "Umgewandelt: $ok von ${offen.size}"
                                     }

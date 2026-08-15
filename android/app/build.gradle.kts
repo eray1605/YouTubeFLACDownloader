@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -13,8 +13,8 @@ android {
         applicationId = "de.eray.ytmusic"
         minSdk = 24
         targetSdk = 35
-        versionCode = 142
-        versionName = "1.4.2"
+        versionCode = 143
+        versionName = "1.4.3"
 
         ndk {
             // arm64-v8a für echte Telefone, x86_64 für den Emulator.

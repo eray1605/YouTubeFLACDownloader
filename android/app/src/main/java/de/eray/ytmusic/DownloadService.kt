@@ -119,27 +119,12 @@ class DownloadService : Service() {
 
         Fortschritt.ergebnis = (Fortschritt.ergebnis ?: "") +
             "\nWandle ${offen.size} Dateien nach WAV …"
-        val kern = try { Python.getInstance().getModule("ytmd.headless") } catch (_: Throwable) { null }
         var fertig = 0
         var gescheitert = 0
         offen.forEachIndexed { i, datei ->
             aktualisieren("Wandle ${i + 1}/${offen.size} nach WAV …")
             Fortschritt.letzterSong = datei.name
-
-            // Das Bild vor der Umwandlung sichern: Aus der Tonspur entstehen
-            // nur rohe Abtastwerte, das Cover ginge sonst verloren.
-            val bild = try {
-                kern?.callAttr("cover_lesen", datei.absolutePath)?.toJava(ByteArray::class.java)
-            } catch (_: Throwable) { null }
-
-            val wav = WavKonverter.nachWav(datei)
-            if (wav != null) {
-                fertig++
-                if (bild != null && bild.isNotEmpty()) {
-                    try { kern?.callAttr("cover_schreiben", wav.absolutePath, bild) }
-                    catch (_: Throwable) { }
-                }
-            } else gescheitert++
+            if (WavKonverter.nachWavMitCover(datei) != null) fertig++ else gescheitert++
         }
         Fortschritt.ergebnis = (Fortschritt.ergebnis ?: "") +
             "\nUmgewandelt: $fertig" + if (gescheitert > 0) " · fehlgeschlagen: $gescheitert" else ""

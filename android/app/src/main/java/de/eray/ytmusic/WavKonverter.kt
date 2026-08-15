@@ -22,6 +22,31 @@ object WavKonverter {
 
     private const val ZEITLIMIT = 10_000L   // Mikrosekunden je Puffer
 
+    /**
+     * Umwandeln und dabei das Cover übernehmen.
+     *
+     * Aus der Tonspur entstehen nur rohe Abtastwerte, das Bild ginge sonst
+     * verloren. Beide Wege – nach dem Download und der Knopf für vorhandene
+     * Dateien – müssen hierüber gehen, sonst verliert einer davon die Cover.
+     */
+    fun nachWavMitCover(quelle: File): File? {
+        val kern = try {
+            com.chaquo.python.Python.getInstance().getModule("ytmd.headless")
+        } catch (_: Throwable) { null }
+
+        val bild = try {
+            kern?.callAttr("cover_lesen", quelle.absolutePath)
+                ?.toJava(ByteArray::class.java)
+        } catch (_: Throwable) { null }
+
+        val wav = nachWav(quelle) ?: return null
+        if (bild != null && bild.isNotEmpty()) {
+            try { kern?.callAttr("cover_schreiben", wav.absolutePath, bild) }
+            catch (_: Throwable) { }
+        }
+        return wav
+    }
+
     /** True, wenn diese Datei umgewandelt werden kann und sollte. */
     fun kandidat(datei: File): Boolean {
         val endung = datei.extension.lowercase()
