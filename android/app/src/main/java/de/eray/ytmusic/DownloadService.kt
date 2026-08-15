@@ -54,8 +54,16 @@ class DownloadService : Service() {
         val playlist = intent.getStringExtra("playlist")      // ganze Playlist
         if (einzelUrl == null && playlist == null) return START_NOT_STICKY
         val ziel = intent.getStringExtra("ziel") ?: filesDir.absolutePath
-        val format = intent.getStringExtra("format") ?: "wav"
+        val format = intent.getStringExtra("format") ?: "original"
         val workers = intent.getIntExtra("workers", 2)
+
+        // Zwei verschiedene Dinge, die vorher denselben Wert benutzt haben:
+        // Python kann auf Android nicht umwandeln (kein FFmpeg), also wird
+        // immer die Originalspur geladen und erst danach hier nach WAV
+        // gewandelt. Sonst scheiterte entweder der Download an FFmpeg oder
+        // die Umwandlung fand gar nicht statt.
+        val nachWav = format == "wav"
+        val ladeFormat = if (nachWav) "original" else format
 
         kanalAnlegen()
         startForeground(1, benachrichtigung("Wird vorbereitet …"))
@@ -72,20 +80,23 @@ class DownloadService : Service() {
 
                 val ergebnis = if (einzelUrl != null) {
                     aktualisieren("Einzelner Song …")
-                    headless.callAttr("einzeln_laden", einzelUrl, ziel, format)
+                    headless.callAttr("einzeln_laden", einzelUrl, ziel, ladeFormat)
                 } else {
                     val listener = Listener { done, total, song ->
                         aktualisieren("$done/$total  ·  $song")
                     }
                     headless.callAttr("run_for_listener",
-                                      playlist, ziel, format, workers, listener)
+                                      playlist, ziel, ladeFormat, workers, listener)
                 }
                 Fortschritt.ergebnis = ergebnis.toString()
+
+                // Nach dem Download auf dem Gerät umwandeln – FFmpeg gibt es
+                // hier nicht, wohl aber die Dekoder des Systems.
+                if (nachWav) umwandeln(ziel)
             } catch (e: Throwable) {
                 Fortschritt.ergebnis = "Fehler: ${e.message}"
-                // Auf dem Gerät nachträglich nach WAV wandeln – FFmpeg gibt es
-                // hier nicht, wohl aber die Dekoder des Systems.
-                if (format == "wav") umwandeln(ziel)
+                // Auch nach einem Abbruch: Was schon geladen wurde, umwandeln.
+                if (nachWav) try { umwandeln(ziel) } catch (_: Throwable) {}
             } finally {
                 medienIndexAktualisieren(ziel)
                 Fortschritt.laeuft = false
