@@ -13,8 +13,8 @@ android {
         applicationId = "de.eray.ytmusic"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 142
+        versionName = "1.4.2"
 
         ndk {
             // arm64-v8a für echte Telefone, x86_64 für den Emulator.
@@ -36,7 +36,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions { jvmTarget = "11" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true      // für BuildConfig.VERSION_NAME in der Kopfzeile
+    }
 
 }
 

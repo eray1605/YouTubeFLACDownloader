@@ -10,7 +10,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
@@ -180,7 +182,10 @@ class MainActivity : ComponentActivity() {
                     Column(Modifier.weight(1f)) {
                         Text("YouTube Music Downloader", color = Farben.Akzent,
                              fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Songs suchen oder ganze Playlists sichern",
+                        // Version sichtbar: Sonst lässt sich nicht erkennen, ob
+                        // eine Korrektur überhaupt auf dem Gerät angekommen ist.
+                        Text("Fassung ${BuildConfig.VERSION_NAME}  ·  Songs suchen " +
+                             "oder ganze Playlists sichern",
                              color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                     TextButton(onClick = umschalten) {
@@ -231,7 +236,11 @@ class MainActivity : ComponentActivity() {
                               laeuft: Boolean, zeigeWorkers: Boolean) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Waagerecht scrollbar: Seit "WAV-CD" und "MP3-192" passen die
+            // Knöpfe nicht mehr nebeneinander, und "Original" lag außerhalb
+            // des Bildschirms – also unerreichbar.
+            Row(Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 formate.distinctBy { it.name }.forEach { f ->
                     FilterChip(selected = format == f.name, onClick = { setFormat(f.name) },
